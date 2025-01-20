@@ -8,6 +8,8 @@
 #include "error.hpp"
 #include "types.hpp"
 
+#include "image_int.hpp"
+
 // + standard includes
 #include <sstream>
 
@@ -592,10 +594,9 @@ size_t XmpArrayValue::count() const {
 }
 
 std::ostream& XmpArrayValue::write(std::ostream& os) const {
-  for (auto i = value_.begin(); i != value_.end(); ++i) {
-    if (i != value_.begin())
-      os << ", ";
-    os << *i;
+  if (!value_.empty()) {
+    std::copy(value_.begin(), value_.end() - 1, std::ostream_iterator<std::string>(os, ", "));
+    os << value_.back();
   }
   return os;
 }
@@ -842,8 +843,7 @@ DateValue* DateValue::clone_() const {
 std::ostream& DateValue::write(std::ostream& os) const {
   // Write DateValue in ISO 8601 Extended format: YYYY-MM-DD
   std::ios::fmtflags f(os.flags());
-  os << std::setw(4) << std::setfill('0') << date_.year << '-' << std::right << std::setw(2) << std::setfill('0')
-     << date_.month << '-' << std::setw(2) << std::setfill('0') << date_.day;
+  os << stringFormat("{:04}-{:02}-{:02}", date_.year, date_.month, date_.day);
   os.flags(f);
   return os;
 }
@@ -863,6 +863,7 @@ int64_t DateValue::toInt64(size_t /*n*/) const {
 uint32_t DateValue::toUint32(size_t /*n*/) const {
   const int64_t t = toInt64();
   if (t < 0 || t > std::numeric_limits<uint32_t>::max()) {
+    ok_ = false;
     return 0;
   }
   return static_cast<uint32_t>(t);
@@ -873,7 +874,12 @@ float DateValue::toFloat(size_t n) const {
 }
 
 Rational DateValue::toRational(size_t n) const {
-  return {static_cast<int32_t>(toInt64(n)), 1};
+  const int64_t t = toInt64(n);
+  if (t < std::numeric_limits<int32_t>::min() || t > std::numeric_limits<int32_t>::max()) {
+    ok_ = false;
+    return {0, 1};
+  }
+  return {static_cast<int32_t>(t), 1};
 }
 
 TimeValue::TimeValue() : Value(time) {
@@ -1018,9 +1024,8 @@ std::ostream& TimeValue::write(std::ostream& os) const {
     plusMinus = '-';
 
   std::ios::fmtflags f(os.flags());
-  os << std::right << std::setw(2) << std::setfill('0') << time_.hour << ':' << std::setw(2) << std::setfill('0')
-     << time_.minute << ':' << std::setw(2) << std::setfill('0') << time_.second << plusMinus << std::setw(2)
-     << std::setfill('0') << abs(time_.tzHour) << ':' << std::setw(2) << std::setfill('0') << abs(time_.tzMinute);
+  os << stringFormat("{:02}:{:02}:{:02}{}{:02}:{:02}", time_.hour, time_.minute, time_.second, plusMinus,
+                     std::abs(time_.tzHour), std::abs(time_.tzMinute));
   os.flags(f);
 
   return os;
@@ -1039,11 +1044,7 @@ int64_t TimeValue::toInt64(size_t /*n*/) const {
 }
 
 uint32_t TimeValue::toUint32(size_t /*n*/) const {
-  const int64_t t = toInt64();
-  if (t < 0 || t > std::numeric_limits<uint32_t>::max()) {
-    return 0;
-  }
-  return static_cast<uint32_t>(t);
+  return std::clamp<int64_t>(toInt64(), 0, std::numeric_limits<uint32_t>::max());
 }
 
 float TimeValue::toFloat(size_t n) const {

@@ -4,11 +4,12 @@
 #pragma once
 
 // *****************************************************************************
-#include <array>
 #include "exiv2lib_export.h"
 
 // included header files
 #include "image.hpp"
+
+#include <array>
 
 // *****************************************************************************
 // namespace extensions
@@ -81,7 +82,7 @@ class EXIV2API AsfVideo : public Image {
     // Constructor to create a GUID object from a byte array
     explicit GUIDTag(const uint8_t* bytes);
 
-    std::string to_string();
+    std::string to_string() const;
 
     bool operator<(const GUIDTag& other) const;
   };

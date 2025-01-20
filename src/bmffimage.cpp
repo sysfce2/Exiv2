@@ -29,6 +29,8 @@
 
 enum {
   TAG_ftyp = 0x66747970U,  //!< "ftyp" File type box */
+  TAG_avci = 0x61766369U,  //!< "avci" AVC */
+  TAG_avcs = 0x61766373U,  //!< "avcs" AVC */
   TAG_avif = 0x61766966U,  //!< "avif" AVIF */
   TAG_avio = 0x6176696fU,  //!< "avio" AVIF */
   TAG_avis = 0x61766973U,  //!< "avis" AVIF */
@@ -68,22 +70,17 @@ enum {
 
 // *****************************************************************************
 // class member definitions
-#ifndef EXV_ENABLE_BMFF
 namespace Exiv2 {
 bool enableBMFF(bool) {
+#ifndef EXV_ENABLE_BMFF
   return false;
 }
-}  // namespace Exiv2
 #else
-namespace Exiv2 {
-static bool enabled = false;
-bool enableBMFF(bool enable) {
-  enabled = enable;
   return true;
 }
 
 std::string Iloc::toString() const {
-  return Internal::stringFormat("ID = %u from,length = %u,%u", ID_, start_, length_);
+  return stringFormat("ID = {} from,length = {},{}", ID_, start_, length_);
 }
 
 BmffImage::BmffImage(BasicIo::UniquePtr io, bool /* create */, size_t max_box_depth) :
@@ -98,8 +95,8 @@ std::string BmffImage::toAscii(uint32_t n) {
   // show 0 as _
   std::replace(result.begin(), result.end(), '\0', '_');
   // show non 7-bit printable ascii as .
-  std::replace_if(
-      result.begin(), result.end(), [](char c) { return c < 32 || c > 126; }, '.');
+  auto f = [](unsigned char c) { return !std::isprint(c); };
+  std::replace_if(result.begin(), result.end(), f, '.');
   return result;
 }
 
@@ -121,6 +118,10 @@ static bool skipBox(uint32_t box) {
 
 std::string BmffImage::mimeType() const {
   switch (fileType_) {
+    case TAG_avci:
+      return "image/avci";
+    case TAG_avcs:
+      return "image/avcs";
     case TAG_avif:
     case TAG_avio:
     case TAG_avis:
@@ -202,7 +203,7 @@ class BrotliDecoderWrapper {
 void BmffImage::brotliUncompress(const byte* compressedBuf, size_t compressedBufSize, DataBuf& arr) {
   BrotliDecoderWrapper decoder;
   size_t uncompressedLen = compressedBufSize * 2;  // just a starting point
-  BrotliDecoderResult result;
+  BrotliDecoderResult result = BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT;
   int dos = 0;
   size_t available_in = compressedBufSize;
   const byte* next_in = compressedBuf;
@@ -210,7 +211,7 @@ void BmffImage::brotliUncompress(const byte* compressedBuf, size_t compressedBuf
   byte* next_out;
   size_t total_out = 0;
 
-  do {
+  while (result != BROTLI_DECODER_RESULT_SUCCESS) {
     arr.alloc(uncompressedLen);
     available_out = uncompressedLen - total_out;
     next_out = arr.data() + total_out;
@@ -233,7 +234,7 @@ void BmffImage::brotliUncompress(const byte* compressedBuf, size_t compressedBuf
       // something bad happened
       throw Error(ErrorCode::kerErrorMessage, BrotliDecoderErrorString(BrotliDecoderGetErrorCode(decoder.get())));
     }
-  } while (result != BROTLI_DECODER_RESULT_SUCCESS);
+  };
 
   if (result != BROTLI_DECODER_RESULT_SUCCESS) {
     throw Error(ErrorCode::kerFailedToReadImageData);
@@ -275,7 +276,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
   if (bTrace) {
     bLF = true;
     out << Internal::indent(depth) << "Exiv2::BmffImage::boxHandler: " << toAscii(box_type)
-        << Internal::stringFormat(" %8zd->%" PRIu64 " ", address, box_length);
+        << stringFormat(" {:8}->{} ", address, box_length);
   }
 
   if (box_length == 1) {
@@ -300,7 +301,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
   const auto buffer_size = box_length - hdrsize;
   if (skipBox(box_type)) {
     if (bTrace) {
-      out << std::endl;
+      out << '\n';
     }
     // The enforce() above checks that restore + buffer_size won't
     // exceed pbox_end, and by implication, won't exceed LONG_MAX
@@ -337,7 +338,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
     // 8.11.6.1
     case TAG_iinf: {
       if (bTrace) {
-        out << std::endl;
+        out << '\n';
         bLF = false;
       }
 
@@ -372,7 +373,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
         id = " *** XMP ***";
       }
       if (bTrace) {
-        out << Internal::stringFormat("ID = %3d ", ID) << name << " " << id;
+        out << stringFormat("ID = {:3} {} {}", ID, name, id);
       }
     } break;
 
@@ -381,7 +382,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
     case TAG_ipco:
     case TAG_meta: {
       if (bTrace) {
-        out << std::endl;
+        out << '\n';
         bLF = false;
       }
       io_->seek(skip, BasicIo::cur);
@@ -393,14 +394,14 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
         if (ilocs_.find(exifID_) != ilocs_.end()) {
           const Iloc& iloc = ilocs_.find(exifID_)->second;
           if (bTrace) {
-            out << Internal::indent(depth) << "Exiv2::BMFF Exif: " << iloc.toString() << std::endl;
+            out << Internal::indent(depth) << "Exiv2::BMFF Exif: " << iloc.toString() << '\n';
           }
           parseTiff(Internal::Tag::root, iloc.length_, iloc.start_);
         }
         if (ilocs_.find(xmpID_) != ilocs_.end()) {
           const Iloc& iloc = ilocs_.find(xmpID_)->second;
           if (bTrace) {
-            out << Internal::indent(depth) << "Exiv2::BMFF XMP: " << iloc.toString() << std::endl;
+            out << Internal::indent(depth) << "Exiv2::BMFF XMP: " << iloc.toString() << '\n';
           }
           parseXmp(iloc.length_, iloc.start_);
         }
@@ -429,7 +430,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
       if (itemCount && itemCount < box_length / 14 && offsetSize == 4 && lengthSize == 4 &&
           ((box_length - 16) % itemCount) == 0) {
         if (bTrace) {
-          out << std::endl;
+          out << '\n';
           bLF = false;
         }
         auto step = (static_cast<size_t>(box_length) - 16) / itemCount;  // length of data per item.
@@ -450,8 +451,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
           uint32_t ldata = data.read_uint32(skip + step - 4, endian_);
           if (bTrace) {
             out << Internal::indent(depth)
-                << Internal::stringFormat("%8zd | %8zd |   ID | %4u | %6u,%6u", address + skip, step, ID, offset, ldata)
-                << std::endl;
+                << stringFormat("{:8} | {:8} |   ID | {:4} | {:6},{:6}\n", address + skip, step, ID, offset, ldata);
           }
           // save data for post-processing in meta box
           if (offset && ldata && ID != unknownID_) {
@@ -469,7 +469,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
       uint32_t height = data.read_uint32(skip, endian_);
       skip += 4;
       if (bTrace) {
-        out << "pixelWidth_, pixelHeight_ = " << Internal::stringFormat("%d, %d", width, height);
+        out << stringFormat("pixelWidth_, pixelHeight_ = {}, {}", width, height);
       }
       // HEIC files can have multiple ispe records
       // Store largest width/height
@@ -505,7 +505,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
       io_->read(uuid.data(), uuid.size());
       std::string name = uuidName(uuid);
       if (bTrace) {
-        out << " uuidName " << name << std::endl;
+        out << " uuidName " << name << '\n';
         bLF = false;
       }
       if (name == "cano" || name == "canp") {
@@ -590,7 +590,7 @@ uint64_t BmffImage::boxHandler(std::ostream& out /* = std::cout*/, Exiv2::PrintS
       break; /* do nothing */
   }
   if (bLF && bTrace)
-    out << std::endl;
+    out << '\n';
 
   // return address of next box
   return box_end;
@@ -684,8 +684,8 @@ void BmffImage::parseCr3Preview(const DataBuf& data, std::ostream& out, bool bTr
     return "application/octet-stream";
   }();
   if (bTrace) {
-    out << Internal::stringFormat("width,height,size = %zu,%zu,%zu", nativePreview.width_, nativePreview.height_,
-                                  nativePreview.size_);
+    out << stringFormat("width,height,size = {},{},{}", nativePreview.width_, nativePreview.height_,
+                        nativePreview.size_);
   }
   nativePreviews_.push_back(std::move(nativePreview));
 }
@@ -791,9 +791,6 @@ Image::UniquePtr newBmffInstance(BasicIo::UniquePtr io, bool create) {
 }
 
 bool isBmffType(BasicIo& iIo, bool advance) {
-  if (!enabled) {
-    return false;
-  }
   const int32_t len = 12;
   byte buf[len];
   iIo.read(buf, len);
@@ -812,5 +809,5 @@ bool isBmffType(BasicIo& iIo, bool advance) {
   }
   return matched;
 }
+#endif  // EXV_ENABLE_BMFF
 }  // namespace Exiv2
-#endif

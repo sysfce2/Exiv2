@@ -12,6 +12,10 @@
 
 #include <iostream>
 
+#ifdef __cpp_lib_endian
+#include <bit>
+#endif
+
 // Signature from front of PGF file
 const unsigned char pgfSignature[3] = {0x50, 0x47, 0x46};
 
@@ -276,7 +280,7 @@ DataBuf PgfImage::readPgfHeaderStructure(BasicIo& iIo, uint32_t& width, uint32_t
 
   if (header.read_uint8(12) == 2)  // Indexed color image. We pass color table (256 * 3 bytes).
   {
-    header.alloc(16 + 256 * 3);
+    header.alloc(16 + (256 * 3));
 
     bufRead = iIo.read(header.data(16), 256 * 3);
     if (iIo.error())

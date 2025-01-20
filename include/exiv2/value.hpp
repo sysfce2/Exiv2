@@ -468,7 +468,7 @@ class EXIV2API CommentValue : public StringValueBase {
     CharsetId charsetId_;  //!< Charset id
     const char* name_;     //!< Name of the charset
     const char* code_;     //!< Code of the charset
-  };                       // struct CharsetTable
+  };
 
   //! Charset information lookup functions. Implemented as a static class.
   class EXIV2API CharsetInfo {
@@ -792,13 +792,11 @@ class EXIV2API XmpArrayValue : public XmpValue {
 struct LangAltValueComparator {
   //! LangAltValueComparator comparison case insensitive function
   bool operator()(const std::string& str1, const std::string& str2) const {
-    int result = str1.size() < str2.size() ? 1 : str1.size() > str2.size() ? -1 : 0;
-    if (result == 0) {
-      for (auto c1 = str1.begin(), c2 = str2.begin(); result == 0 && c1 != str1.end(); ++c1, ++c2) {
-        result = tolower(*c1) < tolower(*c2) ? 1 : tolower(*c1) > tolower(*c2) ? -1 : 0;
-      }
-    }
-    return result < 0;
+    if (str1.size() != str2.size())
+      return str1.size() > str2.size();
+
+    auto f = [](unsigned char a, unsigned char b) { return std::tolower(a) > std::tolower(b); };
+    return std::lexicographical_compare(str1.begin(), str1.end(), str2.begin(), str2.end(), f);
   }
 };
 
@@ -1216,7 +1214,7 @@ class ValueType : public Value {
  private:
   //! Utility for toInt64, toUint32, etc.
   template <typename I>
-  inline I float_to_integer_helper(size_t n) const {
+  I float_to_integer_helper(size_t n) const {
     const auto v = value_.at(n);
     if (static_cast<decltype(v)>(std::numeric_limits<I>::min()) <= v &&
         v <= static_cast<decltype(v)>(std::numeric_limits<I>::max())) {
@@ -1227,7 +1225,7 @@ class ValueType : public Value {
 
   //! Utility for toInt64, toUint32, etc.
   template <typename I>
-  inline I rational_to_integer_helper(size_t n) const {
+  I rational_to_integer_helper(size_t n) const {
     auto a = value_.at(n).first;
     auto b = value_.at(n).second;
 
@@ -1528,8 +1526,8 @@ int ValueType<T>::read(const std::string& buf) {
 template <typename T>
 size_t ValueType<T>::copy(byte* buf, ByteOrder byteOrder) const {
   size_t offset = 0;
-  for (auto i = value_.begin(); i != value_.end(); ++i) {
-    offset += toData(buf + offset, *i, byteOrder);
+  for (const auto& val : value_) {
+    offset += toData(buf + offset, val, byteOrder);
   }
   return offset;
 }

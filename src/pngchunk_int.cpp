@@ -54,7 +54,7 @@ void PngChunk::decodeTXTChunk(Image* pImage, const DataBuf& data, TxtChunkType t
   DataBuf arr = parseTXTChunk(data, key.size(), type);
 
 #ifdef EXIV2_DEBUG_MESSAGES
-  std::cout << "Exiv2::PngChunk::decodeTXTChunk: TXT chunk data: " << std::string(arr.c_str(), arr.size()) << std::endl;
+  std::cout << "Exiv2::PngChunk::decodeTXTChunk: TXT chunk data: " << std::string(arr.c_str(), arr.size()) << '\n';
 #endif
   if (!key.empty())
     parseChunkContent(pImage, key.c_data(), key.size(), arr);
@@ -64,7 +64,7 @@ DataBuf PngChunk::decodeTXTChunk(const DataBuf& data, TxtChunkType type) {
   DataBuf key = keyTXTChunk(data);
 
 #ifdef EXIV2_DEBUG_MESSAGES
-  std::cout << "Exiv2::PngChunk::decodeTXTChunk: TXT chunk key: " << std::string(key.c_str(), key.size()) << std::endl;
+  std::cout << "Exiv2::PngChunk::decodeTXTChunk: TXT chunk key: " << std::string(key.c_str(), key.size()) << '\n';
 #endif
   return parseTXTChunk(data, key.size(), type);
 }
@@ -334,10 +334,10 @@ std::string PngChunk::makeMetadataChunk(const std::string& metadata, MetadataId 
 
 void PngChunk::zlibUncompress(const byte* compressedText, unsigned int compressedTextSize, DataBuf& arr) {
   uLongf uncompressedLen = compressedTextSize * 2;  // just a starting point
-  int zlibResult;
+  int zlibResult = Z_BUF_ERROR;
   int dos = 0;
 
-  do {
+  while (zlibResult == Z_BUF_ERROR) {
     arr.alloc(uncompressedLen);
     zlibResult = uncompress(arr.data(), &uncompressedLen, compressedText, compressedTextSize);
     if (zlibResult == Z_OK) {
@@ -355,7 +355,7 @@ void PngChunk::zlibUncompress(const byte* compressedText, unsigned int compresse
       // something bad happened
       throw Error(ErrorCode::kerFailedToReadImageData);
     }
-  } while (zlibResult == Z_BUF_ERROR);
+  };
 
   if (zlibResult != Z_OK) {
     throw Error(ErrorCode::kerFailedToReadImageData);
@@ -364,10 +364,10 @@ void PngChunk::zlibUncompress(const byte* compressedText, unsigned int compresse
 
 std::string PngChunk::zlibCompress(const std::string& text) {
   auto compressedLen = static_cast<uLongf>(text.size() * 2);  // just a starting point
-  int zlibResult;
+  int zlibResult = Z_BUF_ERROR;
 
   DataBuf arr;
-  do {
+  while (zlibResult == Z_BUF_ERROR) {
     arr.resize(compressedLen);
     zlibResult = compress2(arr.data(), &compressedLen, reinterpret_cast<const Bytef*>(text.data()),
                            static_cast<uLong>(text.size()), Z_BEST_COMPRESSION);
@@ -390,7 +390,7 @@ std::string PngChunk::zlibCompress(const std::string& text) {
         // Something bad happened
         throw Error(ErrorCode::kerFailedToReadImageData);
     }
-  } while (zlibResult == Z_BUF_ERROR);
+  };
 
   return {arr.c_str(), arr.size()};
 
@@ -467,11 +467,11 @@ std::string PngChunk::makeUtf8TxtChunk(const std::string& keyword, const std::st
 }  // PngChunk::makeUtf8TxtChunk
 
 DataBuf PngChunk::readRawProfile(const DataBuf& text, bool iTXt) {
+  DataBuf info;
   if (text.size() <= 1) {
-    return {};
+    return info;
   }
 
-  DataBuf info;
   const unsigned char unhex[103] = {
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0, 0,
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0,  0, 0,
@@ -488,26 +488,26 @@ DataBuf PngChunk::readRawProfile(const DataBuf& text, bool iTXt) {
   const char* eot = text.c_str(text.size() - 1);  // end of text
 
   if (sp >= eot) {
-    return {};
+    return info;
   }
 
   // Look for newline
   while (*sp != '\n') {
     sp++;
     if (sp == eot) {
-      return {};
+      return info;
     }
   }
   sp++;  // step over '\n'
   if (sp == eot) {
-    return {};
+    return info;
   }
 
   // Look for length
   while (*sp == '\0' || *sp == ' ' || *sp == '\n') {
     sp++;
     if (sp == eot) {
-      return {};
+      return info;
     }
   }
 
@@ -519,12 +519,12 @@ DataBuf PngChunk::readRawProfile(const DataBuf& text, bool iTXt) {
     length = newlength;
     sp++;
     if (sp == eot) {
-      return {};
+      return info;
     }
   }
   sp++;  // step over '\n'
   if (sp == eot) {
-    return {};
+    return info;
   }
 
   enforce(length <= static_cast<size_t>(eot - sp) / 2, Exiv2::ErrorCode::kerCorruptedMetadata);
@@ -540,7 +540,7 @@ DataBuf PngChunk::readRawProfile(const DataBuf& text, bool iTXt) {
 #ifdef EXIV2_DEBUG_MESSAGES
     std::cerr << "Exiv2::PngChunk::readRawProfile: Unable To Copy Raw Profile: cannot allocate memory\n";
 #endif
-    return {};
+    return info;
   }
 
   if (info.empty())  // Early return

@@ -6,6 +6,7 @@
 #include "error.hpp"
 #include "i18n.h"  // NLS support.
 
+#include <algorithm>
 #include <ctime>
 #include <iostream>
 
@@ -543,9 +544,11 @@ CiffComponent* CiffDirectory::doAdd(CrwDirs& crwDirs, uint16_t crwTagId) {
     auto dir = crwDirs.top();
     crwDirs.pop();
     // Find the directory
-    auto it = std::find_if(components_.begin(), components_.end(), [=](const auto& c) { return c->tag() == dir.dir; });
-    if (it != components_.end())
-      cc_ = *it;
+    for (const auto& c : components_)
+      if (c->tag() == dir.dir) {
+        cc_ = c;
+        break;
+      }
     if (!cc_) {
       // Directory doesn't exist yet, add it
       m_ = std::make_unique<CiffDirectory>(dir.dir, dir.parent);
@@ -556,10 +559,11 @@ CiffComponent* CiffDirectory::doAdd(CrwDirs& crwDirs, uint16_t crwTagId) {
     cc_ = cc_->add(crwDirs, crwTagId);
   } else {
     // Find the tag
-    auto it =
-        std::find_if(components_.begin(), components_.end(), [=](const auto& c) { return c->tagId() == crwTagId; });
-    if (it != components_.end())
-      cc_ = *it;
+    for (const auto& c : components_)
+      if (c->tagId() == crwTagId) {
+        cc_ = c;
+        break;
+      }
     if (!cc_) {
       // Tag doesn't exist yet, add it
       m_ = std::make_unique<CiffEntry>(crwTagId, tag());
@@ -580,7 +584,7 @@ void CiffHeader::remove(uint16_t crwTagId, uint16_t crwDir) const {
 }  // CiffHeader::remove
 
 void CiffComponent::remove(CrwDirs& crwDirs, uint16_t crwTagId) {
-  return doRemove(crwDirs, crwTagId);
+  doRemove(crwDirs, crwTagId);
 }  // CiffComponent::remove
 
 void CiffComponent::doRemove(CrwDirs& /*crwDirs*/, uint16_t /*crwTagId*/) {
@@ -672,7 +676,8 @@ void CrwMap::decode0x080a(const CiffComponent& ciffComponent, const CrwMapping* 
 void CrwMap::decodeArray(const CiffComponent& ciffComponent, const CrwMapping* pCrwMapping, Image& image,
                          ByteOrder byteOrder) {
   if (ciffComponent.typeId() != unsignedShort) {
-    return decodeBasic(ciffComponent, pCrwMapping, image, byteOrder);
+    decodeBasic(ciffComponent, pCrwMapping, image, byteOrder);
+    return;
   }
 
   int64_t aperture = 0;
@@ -703,7 +708,7 @@ void CrwMap::decodeArray(const CiffComponent& ciffComponent, const CrwMapping* p
     UShortValue value;
     if (ifdId == IfdId::canonCsId && c == 23 && component_size >= 52)
       n = 3;
-    value.read(ciffComponent.pData() + c * 2, n * 2, byteOrder);
+    value.read(ciffComponent.pData() + (c * 2), n * 2, byteOrder);
     image.exifData().add(key, &value);
     if (ifdId == IfdId::canonSiId && c == 21)
       aperture = value.toInt64();
@@ -732,7 +737,8 @@ void CrwMap::decodeArray(const CiffComponent& ciffComponent, const CrwMapping* p
 void CrwMap::decode0x180e(const CiffComponent& ciffComponent, const CrwMapping* pCrwMapping, Image& image,
                           ByteOrder byteOrder) {
   if (ciffComponent.size() < 8 || ciffComponent.typeId() != unsignedLong) {
-    return decodeBasic(ciffComponent, pCrwMapping, image, byteOrder);
+    decodeBasic(ciffComponent, pCrwMapping, image, byteOrder);
+    return;
   }
   ULongValue v;
   v.read(ciffComponent.pData(), 8, byteOrder);
@@ -758,7 +764,8 @@ void CrwMap::decode0x180e(const CiffComponent& ciffComponent, const CrwMapping* 
 void CrwMap::decode0x1810(const CiffComponent& ciffComponent, const CrwMapping* pCrwMapping, Image& image,
                           ByteOrder byteOrder) {
   if (ciffComponent.typeId() != unsignedLong || ciffComponent.size() < 28) {
-    return decodeBasic(ciffComponent, pCrwMapping, image, byteOrder);
+    decodeBasic(ciffComponent, pCrwMapping, image, byteOrder);
+    return;
   }
 
   ExifKey key1("Exif.Photo.PixelXDimension");
@@ -997,17 +1004,16 @@ DataBuf packIfdId(const ExifData& exifData, IfdId ifdId, ByteOrder byteOrder) {
   for (auto&& exif : exifData) {
     if (exif.ifdId() != ifdId)
       continue;
-    const uint16_t s = exif.tag() * 2 + static_cast<uint16_t>(exif.size());
+    const uint16_t s = (exif.tag() * 2) + static_cast<uint16_t>(exif.size());
     if (s <= size) {
-      if (len < s)
-        len = s;
+      len = std::max(len, s);
       exif.copy(buf.data(exif.tag() * 2), byteOrder);
     } else {
       EXV_ERROR << "packIfdId out-of-bounds error: s = " << std::dec << s << "\n";
     }
   }
   // Round the size to make it even.
-  buf.resize(len + len % 2);
+  buf.resize(len + (len % 2));
   return buf;
 }
 

@@ -55,6 +55,10 @@
 #include <bit>
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 // *****************************************************************************
 namespace {
 using namespace Exiv2;
@@ -352,8 +356,7 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
       throw Error(ErrorCode::kerTiffDirectoryTooLarge);
 
     if (bFirst && bPrint) {
-      out << Internal::indent(depth) << Internal::stringFormat("STRUCTURE OF TIFF FILE (%c%c): ", c, c) << io.path()
-          << std::endl;
+      out << Internal::indent(depth) << stringFormat("STRUCTURE OF TIFF FILE ({}{}): {}\n", c, c, io.path());
     }
 
     // Read the dictionary
@@ -377,7 +380,7 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
 
       // Break for unknown tag types else we may segfault.
       if (!typeValid(type)) {
-        EXV_ERROR << "invalid type in tiff structure" << type << std::endl;
+        EXV_ERROR << "invalid type in tiff structure" << type << '\n';
         throw Error(ErrorCode::kerInvalidTypeValue);
       }
 
@@ -393,13 +396,9 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
           return count;
         // restrict long arrays
         if (isStringType(type)) {
-          if (count > 32u)
-            return 32u;
-          return count;
+          return std::min(count, 32u);
         }
-        if (count > 5u)
-          return 5u;
-        return count;
+        return std::min(count, 5u);
       }();
       uint32_t pad = isStringType(type) ? 1 : 0;
       size_t size = [=] {
@@ -417,7 +416,7 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
       // if ( offset > io.size() ) offset = 0; // Denial of service?
 
       // #55 and #56 memory allocation crash test/data/POC8
-      const size_t allocate64 = size * count + pad + 20;
+      const size_t allocate64 = (size * count) + pad + 20;
       if (allocate64 > io.size()) {
         throw Error(ErrorCode::kerInvalidMalloc);
       }
@@ -436,12 +435,12 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
       }
 
       if (bPrint) {
-        const size_t address = start + 2 + i * 12;
-        const std::string offsetString = bOffsetIsPointer ? Internal::stringFormat("%10u", offset) : "";
+        const size_t address = start + 2 + (i * 12);
+        const std::string offsetString = bOffsetIsPointer ? stringFormat("{:9}", offset) : "";
 
         out << Internal::indent(depth)
-            << Internal::stringFormat("%8zu | %#06x %-28s |%10s |%9u |%10s | ", address, tag, tagName(tag).c_str(),
-                                      typeName(type), count, offsetString.c_str());
+            << stringFormat("{:8} | {:#06x} {:<28} | {:>9} | {:>8} | {:9} | ", address, tag, tagName(tag).c_str(),
+                            typeName(type), count, offsetString);
         if (isShortType(type)) {
           for (size_t k = 0; k < kount; k++) {
             out << sp << byteSwap2(buf, k * size, bSwap);
@@ -455,8 +454,8 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
 
         } else if (isRationalType(type)) {
           for (size_t k = 0; k < kount; k++) {
-            uint32_t a = byteSwap4(buf, k * size + 0, bSwap);
-            uint32_t b = byteSwap4(buf, k * size + 4, bSwap);
+            uint32_t a = byteSwap4(buf, (k * size) + 0, bSwap);
+            uint32_t b = byteSwap4(buf, (k * size) + 4, bSwap);
             out << sp << a << "/" << b;
             sp = " ";
           }
@@ -465,7 +464,7 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
         }
 
         sp = kount == count ? "" : " ...";
-        out << sp << std::endl;
+        out << sp << '\n';
 
         if (option == kpsRecursive && (tag == 0x8769 /* ExifTag */ || tag == 0x014a /*SubIFDs*/ || type == tiffIfd)) {
           for (size_t k = 0; k < count; k++) {
@@ -533,7 +532,7 @@ void Image::printIFDStructure(BasicIo& io, std::ostream& out, Exiv2::PrintStruct
   } while (start);
 
   if (bPrint) {
-    out << Internal::indent(depth) << "END " << io.path() << std::endl;
+    out << Internal::indent(depth) << "END " << io.path() << '\n';
   }
   out.flush();
 }
@@ -831,9 +830,19 @@ BasicIo::UniquePtr ImageFactory::createIo(const std::string& path, [[maybe_unuse
 
   return std::make_unique<FileIo>(path);
 #else
-  return nullptr;
+  throw Error(ErrorCode::kerFileAccessDisabled, path);
 #endif
 }  // ImageFactory::createIo
+
+#ifdef _WIN32
+BasicIo::UniquePtr ImageFactory::createIo(const std::wstring& path) {
+#ifdef EXV_ENABLE_FILESYSTEM
+  return std::make_unique<FileIo>(path);
+#else
+  return nullptr;
+#endif
+}
+#endif
 
 Image::UniquePtr ImageFactory::open(const std::string& path, bool useCurl) {
   auto image = open(ImageFactory::createIo(path, useCurl));  // may throw
@@ -841,6 +850,18 @@ Image::UniquePtr ImageFactory::open(const std::string& path, bool useCurl) {
     throw Error(ErrorCode::kerFileContainsUnknownImageType, path);
   return image;
 }
+
+#ifdef _WIN32
+Image::UniquePtr ImageFactory::open(const std::wstring& path) {
+  auto image = open(ImageFactory::createIo(path));  // may throw
+  if (!image) {
+    char t[1024];
+    WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, t, 1024, nullptr, nullptr);
+    throw Error(ErrorCode::kerFileContainsUnknownImageType, t);
+  }
+  return image;
+}
+#endif
 
 Image::UniquePtr ImageFactory::open(const byte* data, size_t size) {
   auto image = open(std::make_unique<MemIo>(data, size));  // may throw

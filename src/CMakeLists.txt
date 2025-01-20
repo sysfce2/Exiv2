@@ -200,7 +200,6 @@ endif()
 set_target_properties(exiv2lib_int PROPERTIES POSITION_INDEPENDENT_CODE ON COMPILE_DEFINITIONS exiv2lib_EXPORTS)
 
 # NOTE: Cannot use target_link_libraries on OBJECT libraries with old versions of CMake
-target_include_directories(exiv2lib_int PRIVATE ${ZLIB_INCLUDE_DIR})
 target_include_directories(exiv2lib SYSTEM PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/xmpsdk/include>)
 
 if(EXIV2_ENABLE_XMP OR EXIV2_ENABLE_EXTERNAL_XMP)
@@ -227,8 +226,7 @@ target_include_directories(exiv2lib_int PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURC
 
 if(EXIV2_ENABLE_WEBREADY)
   if(EXIV2_ENABLE_CURL)
-    target_include_directories(exiv2lib SYSTEM PRIVATE ${CURL_INCLUDE_DIR})
-    target_link_libraries(exiv2lib PRIVATE ${CURL_LIBRARIES})
+    target_link_libraries(exiv2lib PRIVATE CURL::libcurl)
     list(APPEND requires_private_list "libcurl")
   endif()
 endif()
@@ -237,6 +235,7 @@ if(WIN32)
   target_compile_definitions(exiv2lib PRIVATE PSAPI_VERSION=1) # to be compatible with <= WinVista (#905)
   # Since windows.h is included in some headers, we need to propagate this definition
   target_compile_definitions(exiv2lib PUBLIC WIN32_LEAN_AND_MEAN)
+  set_target_properties(exiv2lib PROPERTIES DEBUG_POSTFIX d)
 endif()
 
 if(NOT MSVC)
@@ -252,8 +251,15 @@ else()
   target_link_libraries(exiv2lib PRIVATE psapi ws2_32 shell32)
 endif()
 
+if(NOT EXV_HAVE_STD_FORMAT)
+  target_link_libraries(exiv2lib PRIVATE fmt::fmt)
+  target_link_libraries(exiv2lib_int PRIVATE fmt::fmt)
+  list(APPEND requires_private_list "fmt")
+endif()
+
 if(EXIV2_ENABLE_PNG)
   target_link_libraries(exiv2lib PRIVATE ZLIB::ZLIB)
+  target_include_directories(exiv2lib_int PRIVATE ${ZLIB_INCLUDE_DIR})
   list(APPEND requires_private_list "zlib")
 endif()
 
@@ -278,13 +284,16 @@ endif()
 if(Iconv_FOUND AND Iconv_LIBRARIES)
   target_link_libraries(exiv2lib PRIVATE Iconv::Iconv)
   list(APPEND libs_private_list "iconv")
+  set(EXV_HAVE_LIBICONV TRUE)
+else()
+  set(EXV_HAVE_LIBICONV FALSE)
 endif()
 
 if(EXIV2_ENABLE_INIH)
-  target_link_libraries(exiv2lib_int PRIVATE inih::libinih)
   target_link_libraries(exiv2lib_int PRIVATE inih::inireader)
-  target_link_libraries(exiv2lib PRIVATE inih::libinih)
+  target_link_libraries(exiv2lib_int PRIVATE inih::libinih)
   target_link_libraries(exiv2lib PRIVATE inih::inireader)
+  target_link_libraries(exiv2lib PRIVATE inih::libinih)
   list(APPEND requires_private_list "INIReader")
 endif()
 

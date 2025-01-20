@@ -16,9 +16,6 @@ void processModify(const std::string& line, int num, IptcData& iptcData);
 int main(int argc, char* const argv[]) {
   Exiv2::XmpParser::initialize();
   ::atexit(Exiv2::XmpParser::terminate);
-#ifdef EXV_ENABLE_BMFF
-  Exiv2::enableBMFF();
-#endif
 
   try {
     if (argc != 2) {
@@ -34,7 +31,7 @@ int main(int argc, char* const argv[]) {
     std::string line;
     int num = 0;
     std::getline(std::cin, line);
-    while (line.length() && processLine(line, ++num, image->iptcData())) {
+    while (!line.empty() && processLine(line, ++num, image->iptcData())) {
       std::getline(std::cin, line);
     }
 

@@ -5166,11 +5166,11 @@ XmpKey* XmpKey::clone_() const {
 }
 
 std::string XmpKey::key() const {
-  return std::string(p_->familyName_) + "." + p_->prefix_ + "." + p_->property_;
+  return std::string(Exiv2::XmpKey::Impl::familyName_) + "." + p_->prefix_ + "." + p_->property_;
 }
 
 const char* XmpKey::familyName() const {
-  return p_->familyName_;
+  return Exiv2::XmpKey::Impl::familyName_;
 }
 
 std::string XmpKey::groupName() const {
@@ -5247,7 +5247,7 @@ std::ostream& operator<<(std::ostream& os, const XmpPropertyInfo& property) {
       os << Q;
     os << c;
   }
-  os << Q << std::endl;
+  os << Q << '\n';
   return os;
 }
 //! @endcond

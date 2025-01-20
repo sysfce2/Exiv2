@@ -1,6 +1,5 @@
 from conans import ConanFile
 from conans.tools import os_info
-from conans.model.version import Version
 
 class Exiv2Conan(ConanFile):
     settings = 'os', 'compiler', 'build_type', 'arch'
@@ -26,6 +25,8 @@ class Exiv2Conan(ConanFile):
         self.requires('brotli/1.0.9')
 
         self.requires('inih/55')
+
+        self.requires('fmt/10.1.1')
 
         if self.options.webready:
             self.requires('libcurl/7.85.0')

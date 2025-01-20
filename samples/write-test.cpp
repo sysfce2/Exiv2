@@ -18,9 +18,6 @@ void exifPrint(const ExifData& exifData);
 int main(int argc, char* const argv[]) {
   Exiv2::XmpParser::initialize();
   ::atexit(Exiv2::XmpParser::terminate);
-#ifdef EXV_ENABLE_BMFF
-  Exiv2::enableBMFF();
-#endif
 
   try {
     if (argc != 3) {
@@ -156,11 +153,10 @@ void testCase(const std::string& file1, const std::string& file2, const std::str
 // *****************************************************************************
 
 void exifPrint(const ExifData& exifData) {
-  auto i = exifData.begin();
-  for (; i != exifData.end(); ++i) {
-    std::cout << std::setw(44) << std::setfill(' ') << std::left << i->key() << " "
-              << "0x" << std::setw(4) << std::setfill('0') << std::right << std::hex << i->tag() << " " << std::setw(9)
-              << std::setfill(' ') << std::left << i->typeName() << " " << std::dec << std::setw(3) << std::setfill(' ')
-              << std::right << i->count() << "  " << std::dec << i->value() << "\n";
+  for (const auto& i : exifData) {
+    std::cout << std::setw(44) << std::setfill(' ') << std::left << i.key() << " "
+              << "0x" << std::setw(4) << std::setfill('0') << std::right << std::hex << i.tag() << " " << std::setw(9)
+              << std::setfill(' ') << std::left << i.typeName() << " " << std::dec << std::setw(3) << std::setfill(' ')
+              << std::right << i.count() << "  " << std::dec << i.value() << "\n";
   }
 }

@@ -143,7 +143,7 @@ struct ConstSliceBase : SliceBase {
     if (new_end > this->end_) {
       throw std::out_of_range("Invalid input parameters to slice");
     }
-    return slice_type(storage_.data_, new_begin, new_end);
+    return {storage_.data_, new_begin, new_end};
   }
 
  protected:
@@ -176,21 +176,21 @@ struct MutableSliceBase : public ConstSliceBase<storage_type, data_type> {
     return this->storage_.unsafeAt(this->begin_ + index);
   }
 
-  const value_type& at(size_t index) const {
+  [[nodiscard]] const value_type& at(size_t index) const {
     return base_type::at(index);
   }
 
   /*!
    * Obtain an iterator to the first element in the slice.
    */
-  iterator begin() noexcept {
+  [[nodiscard]] iterator begin() noexcept {
     return this->storage_.unsafeGetIteratorAt(this->begin_);
   }
 
   /*!
    * Obtain an iterator to the first element beyond the slice.
    */
-  iterator end() noexcept {
+  [[nodiscard]] iterator end() noexcept {
     return this->storage_.unsafeGetIteratorAt(this->end_);
   }
 
@@ -227,7 +227,7 @@ struct MutableSliceBase : public ConstSliceBase<storage_type, data_type> {
    * mutable_slice_base.
    */
   template <typename slice_type>
-  slice_type subSlice(size_t begin, size_t end) {
+  [[nodiscard]] slice_type subSlice(size_t begin, size_t end) {
     this->rangeCheck(begin);
     // end == size() is a legal value, since end is the first
     // element beyond the slice
@@ -241,7 +241,7 @@ struct MutableSliceBase : public ConstSliceBase<storage_type, data_type> {
     if (new_end > this->end_) {
       throw std::out_of_range("Invalid input parameters to slice");
     }
-    return slice_type(this->storage_.data_, new_begin, new_end);
+    return {this->storage_.data_, new_begin, new_end};
   }
 };
 
@@ -410,7 +410,7 @@ struct PtrSliceStorage {
  * // 3
  * // 4
  * for (const auto & elem : three_four) {
- *     std::cout << elem << std::endl;
+ *     std::cout << elem << '\n';
  * }
  * ~~~~~~~~~~~~~~~~~~~~~~~~~
  *
@@ -428,19 +428,6 @@ struct Slice : public Internal::MutableSliceBase<Internal::ContainerStorage, con
 #else
   using value_type = typename std::remove_cv<typename container::value_type>::type;
 #endif
-
-  /*!
-   * Construct a sub-slice of this slice with the given bounds. The bounds
-   * are evaluated with respect to the current slice.
-   *
-   * @param[in] begin  First element in the new slice.
-   * @param[in] end  First element beyond the new slice.
-   *
-   * @throw std::out_of_range when begin or end are invalid
-   */
-  Slice subSlice(size_t begin, size_t end) {
-    return Internal::MutableSliceBase<Internal::ContainerStorage, container>::template subSlice<Slice>(begin, end);
-  }
 
   /*!
    * Constructs a new constant subSlice. Behaves otherwise exactly like
@@ -466,7 +453,7 @@ struct Slice<const container> : public Internal::ConstSliceBase<Internal::Contai
   using value_type = typename std::remove_cv<typename container::value_type>::type;
 #endif
 
-  Slice subSlice(size_t begin, size_t end) const {
+  [[nodiscard]] Slice subSlice(size_t begin, size_t end) const {
     return Internal::ConstSliceBase<Internal::ContainerStorage,
                                     const container>::template subSlice<Slice<const container>>(begin, end);
   }
@@ -499,7 +486,7 @@ struct Slice<const T*> : public Internal::ConstSliceBase<Internal::PtrSliceStora
     // TODO: use using in C++11
   }
 
-  Slice<const T*> subSlice(size_t begin, size_t end) const {
+  [[nodiscard]] Slice<const T*> subSlice(size_t begin, size_t end) const {
     return Internal::ConstSliceBase<Internal::PtrSliceStorage, const T*>::template subSlice<Slice<const T*>>(begin,
                                                                                                              end);
   }
@@ -514,7 +501,7 @@ struct Slice<T*> : public Internal::MutableSliceBase<Internal::PtrSliceStorage, 
     // TODO: use using in C++11
   }
 
-  Slice<T*> subSlice(size_t begin, size_t end) {
+  [[nodiscard]] Slice<T*> subSlice(size_t begin, size_t end) {
     return Internal::MutableSliceBase<Internal::PtrSliceStorage, T*>::template subSlice<Slice<T*>>(begin, end);
   }
 
@@ -530,7 +517,7 @@ struct Slice<T*> : public Internal::MutableSliceBase<Internal::PtrSliceStorage, 
  * parameter deduction.
  */
 template <typename T>
-Slice<T> makeSlice(T& cont, size_t begin, size_t end) {
+[[nodiscard]] Slice<T> makeSlice(T& cont, size_t begin, size_t end) {
   return {cont, begin, end};
 }
 
@@ -538,7 +525,7 @@ Slice<T> makeSlice(T& cont, size_t begin, size_t end) {
  * Overload of makeSlice for slices of C-arrays.
  */
 template <typename T>
-Slice<T*> makeSlice(T* ptr, size_t begin, size_t end) {
+[[nodiscard]] Slice<T*> makeSlice(T* ptr, size_t begin, size_t end) {
   return {ptr, begin, end};
 }
 
@@ -546,7 +533,7 @@ Slice<T*> makeSlice(T* ptr, size_t begin, size_t end) {
  * @brief Return a new slice spanning the whole container.
  */
 template <typename container>
-Slice<container> makeSlice(container& cont) {
+[[nodiscard]] Slice<container> makeSlice(container& cont) {
   return {cont, 0, cont.size()};
 }
 
@@ -555,7 +542,7 @@ Slice<container> makeSlice(container& cont) {
  * container.
  */
 template <typename container>
-Slice<container> makeSliceFrom(container& cont, size_t begin) {
+[[nodiscard]] Slice<container> makeSliceFrom(container& cont, size_t begin) {
   return {cont, begin, cont.size()};
 }
 
@@ -563,7 +550,7 @@ Slice<container> makeSliceFrom(container& cont, size_t begin) {
  * @brief Return a new slice spanning until `end`.
  */
 template <typename container>
-Slice<container> makeSliceUntil(container& cont, size_t end) {
+[[nodiscard]] Slice<container> makeSliceUntil(container& cont, size_t end) {
   return {cont, 0, end};
 }
 
@@ -571,7 +558,7 @@ Slice<container> makeSliceUntil(container& cont, size_t end) {
  * Overload of makeSliceUntil for pointer based slices.
  */
 template <typename T>
-Slice<T*> makeSliceUntil(T* ptr, size_t end) {
+[[nodiscard]] Slice<T*> makeSliceUntil(T* ptr, size_t end) {
   return {ptr, 0, end};
 }
 

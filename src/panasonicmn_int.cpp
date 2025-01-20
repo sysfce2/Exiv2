@@ -3,6 +3,7 @@
 // included header files
 #include "panasonicmn_int.hpp"
 #include "i18n.h"  // NLS support.
+#include "image_int.hpp"
 #include "tags_int.hpp"
 #include "types.hpp"
 #include "value.hpp"
@@ -619,9 +620,7 @@ std::ostream& PanasonicMakerNote::print0x0029(std::ostream& os, const Value& val
   std::ostringstream oss;
   oss.copyfmt(os);
   const auto time = value.toInt64();
-  os << std::setw(2) << std::setfill('0') << time / 360000 << ":" << std::setw(2) << std::setfill('0')
-     << (time % 360000) / 6000 << ":" << std::setw(2) << std::setfill('0') << (time % 6000) / 100 << "." << std::setw(2)
-     << std::setfill('0') << time % 100;
+  os << stringFormat("{:02}:{:02}:{:02}.{:02}", time / 360000, (time % 360000) / 6000, (time % 6000) / 100, time % 100);
   os.copyfmt(oss);
 
   return os;
@@ -758,6 +757,12 @@ constexpr TagInfo PanasonicMakerNote::tagInfoRaw_[] = {
      unsignedLong, -1, printValue},
     {0x0118, "RawDataOffset", N_("Raw Data Offset"), N_("Raw data offset"), IfdId::panaRawId, SectionId::panaRaw,
      unsignedLong, -1, printValue},
+    {0x0119, "DistortionInfo", N_("Distortion Info"), N_("Distortion info"), IfdId::panaRawId, SectionId::panaRaw,
+     signedShort, -1, printValue},
+    {0x011c, "Gamma", N_("Gamma"), N_("Gamma"), IfdId::panaRawId, SectionId::panaRaw, unsignedShort, -1, printValue},
+    {0x013b, "Artist", N_("Artist"), N_("Artist"), IfdId::panaRawId, SectionId::panaRaw, asciiString, -1, printValue},
+    {0x8298, "Copyright", N_("Copyright"), N_("Copyright"), IfdId::panaRawId, SectionId::panaRaw, asciiString, -1,
+     printValue},
     {0x8769, "ExifTag", N_("Exif IFD Pointer"), N_("A pointer to the Exif IFD"), IfdId::panaRawId, SectionId::panaRaw,
      unsignedLong, -1, printValue},
     {0x8825, "GPSTag", N_("GPS Info IFD Pointer"), N_("A pointer to the GPS Info IFD"), IfdId::panaRawId,

@@ -13,8 +13,8 @@
 #include <iostream>
 
 namespace {
-constexpr auto xmlHeader = "<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n";
-const auto xmlHdrCnt = static_cast<long>(std::strlen(xmlHeader));  // without the trailing 0-character
+constexpr char xmlHeader[] = "<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n";
+constexpr auto xmlHdrCnt = std::size(xmlHeader) - 1;  // without the trailing 0-character
 constexpr auto xmlFooter = "<?xpacket end=\"w\"?>";
 }  // namespace
 
@@ -109,7 +109,7 @@ void XmpSidecar::writeMetadata() {
       Exiv2::XmpKey key(sKey);
       if (xmpData_.findKey(key) != xmpData_.end()) {
         std::string value_now(xmpData_[sKey].value().toString());
-        // std::cout << key << " -> " << value_now << " => " << value_orig << std::endl;
+        // std::cout << key << " -> " << value_now << " => " << value_orig << '\n';
         if (Internal::contains(value_orig, value_now.substr(0, 10))) {
           xmpData_[sKey] = value_orig;
         }

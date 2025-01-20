@@ -259,7 +259,7 @@ void JpegBase::readMetadata() {
       uint32_t s = buf.read_uint32(2 + 14, bigEndian);
 #ifdef EXIV2_DEBUG_MESSAGES
       std::cerr << "Found ICC Profile chunk " << chunk << " of " << chunks << (chunk == 1 ? " size: " : "")
-                << (chunk == 1 ? s : 0) << std::endl;
+                << (chunk == 1 ? s : 0) << '\n';
 #endif
       // #1286 profile can be padded
       size_t icc_size = size - 2 - 14;
@@ -329,7 +329,7 @@ void JpegBase::readMetadata() {
 
 #define REPORT_MARKER                                 \
   if ((option == kpsBasic || option == kpsRecursive)) \
-  out << Internal::stringFormat("%8zd | 0xff%02x %-5s", io_->tell() - 2, marker, nm[marker].c_str())
+  out << stringFormat("{:8} | 0xff{:02x} {:<5}", io_->tell() - 2, marker, nm[marker].c_str())
 
 void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, size_t depth) {
   if (io_->open() != 0)
@@ -378,8 +378,8 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
     while (!done) {
       // print marker bytes
       if (first && bPrint) {
-        out << "STRUCTURE OF JPEG FILE: " << io_->path() << std::endl;
-        out << " address | marker       |  length | data" << std::endl;
+        out << "STRUCTURE OF JPEG FILE: " << io_->path() << '\n';
+        out << " address | marker       |  length | data" << '\n';
         REPORT_MARKER;
       }
       first = false;
@@ -395,7 +395,7 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
       }
 
       if (bPrint && markerHasLength(marker))
-        out << Internal::stringFormat(" | %7d ", size);
+        out << stringFormat(" | {:7} ", size);
 
       // print signature for APPn
       if (marker >= app0_ && marker <= (app0_ | 0x0F)) {
@@ -445,7 +445,7 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
           if (size >= 16) {
             out.write(buf.c_str(16), size - 16);
 #ifdef EXIV2_DEBUG_MESSAGES
-            std::cout << "iccProfile size = " << size - 16 << std::endl;
+            std::cout << "iccProfile size = " << size - 16 << '\n';
 #endif
           }
         } else if (option == kpsIptcErase && signature == "Photoshop 3.0") {
@@ -454,7 +454,9 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
         } else if (bPrint) {
           const size_t start = 2;
           const size_t end = size > 34 ? 34 : size;
-          out << "| " << Internal::binaryToString(makeSlice(buf, start, end));
+          out << "| ";
+          if (start < end)
+            out << Internal::binaryToString(makeSlice(buf, start, end));
           if (signature == iccId_) {
             // extract the chunk information from the buffer
             //
@@ -468,7 +470,7 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
             enforce<std::out_of_range>(size >= 16, "Buffer too small to extract chunk information.");
             const int chunk = buf.read_uint8(2 + 12);
             const int chunks = buf.read_uint8(2 + 13);
-            out << Internal::stringFormat(" chunk %d/%d", chunk, chunks);
+            out << stringFormat(" chunk {}/{}", chunk, chunks);
           }
         }
 
@@ -480,7 +482,7 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
         bool bPS = option == kpsRecursive && signature == "Photoshop 3.0";
         if (bFlir || bExif || bMPF || bPS) {
           // extract Exif data block which is tiff formatted
-          out << std::endl;
+          out << '\n';
 
           //                        const byte* exif = buf.c_data();
           uint32_t start = signature == "Exif" ? 8 : 6;
@@ -512,8 +514,8 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
             }
 #ifdef EXIV2_DEBUG_MESSAGES
             if (start < max)
-              std::cout << "  FFF start = " << start << std::endl;
-              // << " index = " << pFFF->dwIndexOff << std::endl;
+              std::cout << "  FFF start = " << start << '\n';
+              // << " index = " << pFFF->dwIndexOff << '\n';
 #endif
           }
 
@@ -542,7 +544,7 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
       }
 
       if (bLF)
-        out << std::endl;
+        out << '\n';
 
       if (marker != sos_) {
         // Read the beginning of the next segment
@@ -551,7 +553,7 @@ void JpegBase::printStructure(std::ostream& out, PrintStructureOption option, si
       }
       done |= marker == eoi_ || marker == sos_;
       if (done && bPrint)
-        out << std::endl;
+        out << '\n';
     }
   }
   if (option == kpsIptcErase && !iptcDataSegs.empty()) {
@@ -601,9 +603,11 @@ DataBuf JpegBase::readNextSegment(byte marker) {
 
   // Read the rest of the segment if not empty.
   DataBuf buf(size);
-  if (size > 2) {
-    io_->readOrThrow(buf.data(2), size - 2, ErrorCode::kerFailedToReadImageData);
+  if (size > 0) {
     std::copy(sizebuf.begin(), sizebuf.end(), buf.begin());
+    if (size > 2) {
+      io_->readOrThrow(buf.data(2), size - 2, ErrorCode::kerFailedToReadImageData);
+    }
   }
   return buf;
 }
@@ -813,11 +817,11 @@ void JpegBase::doWriteMetadata(BasicIo& outIo) {
         tmpBuf[0] = 0xff;
         tmpBuf[1] = app2_;
 
-        const size_t chunk_size = 256 * 256 - 40;  // leave bytes for marker, header and padding
+        const size_t chunk_size = (256 * 256) - 40;  // leave bytes for marker, header and padding
         size_t size = iccProfile_.size();
         if (size >= 255 * chunk_size)
           throw Error(ErrorCode::kerTooLargeJpegSegment, "IccProfile");
-        const size_t chunks = 1 + (size - 1) / chunk_size;
+        const size_t chunks = 1 + ((size - 1) / chunk_size);
         for (size_t chunk = 0; chunk < chunks; chunk++) {
           size_t bytes = size > chunk_size ? chunk_size : size;  // bytes to write
           size -= bytes;

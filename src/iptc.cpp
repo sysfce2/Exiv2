@@ -282,7 +282,7 @@ void IptcData::printStructure(std::ostream& out, const Slice<byte*>& bytes, size
   size_t i = 0;
   while (i < bytes.size() - 3 && bytes.at(i) != 0x1c)
     i++;
-  out << Internal::indent(++depth) << "Record | DataSet | Name                     | Length | Data" << std::endl;
+  out << Internal::indent(++depth) << "Record | DataSet | Name                     | Length | Data" << '\n';
   while (i < bytes.size() - 3) {
     if (bytes.at(i) != 0x1c) {
       break;
@@ -297,7 +297,7 @@ void IptcData::printStructure(std::ostream& out, const Slice<byte*>& bytes, size
 
     Internal::enforce(bytes.size() - i >= 5 + static_cast<size_t>(len), ErrorCode::kerCorruptedMetadata);
     out << buff << Internal::binaryToString(makeSlice(bytes, i + 5, i + 5 + (len > 40 ? 40 : len)))
-        << (len > 40 ? "..." : "") << std::endl;
+        << (len > 40 ? "..." : "") << '\n';
     i += 5 + len;
   }
 }
@@ -313,9 +313,9 @@ const char* IptcData::detectCharset() const {
   bool ascii = true;
   bool utf8 = true;
 
-  for (pos = begin(); pos != end(); ++pos) {
-    std::string value = pos->toString();
-    if (pos->value().ok()) {
+  for (const auto& key : *this) {
+    std::string value = key.toString();
+    if (key.value().ok()) {
       int seqCount = 0;
       for (auto c : value) {
         if (seqCount) {
@@ -420,10 +420,11 @@ int IptcParser::decode(IptcData& iptcData, const byte* pData, size_t size) {
 }  // IptcParser::decode
 
 DataBuf IptcParser::encode(const IptcData& iptcData) {
+  DataBuf buf;
   if (iptcData.empty())
-    return {};
+    return buf;
 
-  DataBuf buf(iptcData.size());
+  buf = DataBuf(iptcData.size());
   byte* pWrite = buf.data();
 
   // Copy the iptc data sets and sort them by record but preserve the order of datasets

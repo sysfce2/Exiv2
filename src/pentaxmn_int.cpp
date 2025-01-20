@@ -4,6 +4,7 @@
 #include "pentaxmn_int.hpp"
 #include "exif.hpp"
 #include "i18n.h"  // NLS support.
+#include "image_int.hpp"
 #include "makernote_int.hpp"
 #include "tags.hpp"
 #include "types.hpp"
@@ -824,6 +825,7 @@ constexpr TagDetails pentaxLensType[] = {
     {0x0841, "HD PENTAX-D FA 70-210mm F4 ED SDM WR"},
     {0x0842, "HD PENTAX-D FA* 85mm F1.4 SDM AW"},
     {0x0843, "HD PENTAX-D FA 21mm F2.4 ED Limited DC WR"},
+    {0x08c3, "HD PENTAX DA* 16-50mm F2.8 ED PLM AW"},
     {0x08c4, "HD PENTAX-DA* 11-18mm F2.8 ED DC AW"},
     {0x08c5, "HD PENTAX-DA 55-300mm F4.5-6.3 ED PLM WR RE"},
     {0x08c6, "smc PENTAX-DA L 18-50mm F4-5.6 DC WR RE"},
@@ -914,21 +916,14 @@ std::ostream& PentaxMakerNote::printResolution(std::ostream& os, const Value& va
 
 std::ostream& PentaxMakerNote::printDate(std::ostream& os, const Value& value, const ExifData*) {
   /* I choose same format as is used inside EXIF itself */
-  os << ((static_cast<uint16_t>(value.toInt64(0)) << 8) + value.toInt64(1));
-  os << ":";
-  os << std::setw(2) << std::setfill('0') << value.toInt64(2);
-  os << ":";
-  os << std::setw(2) << std::setfill('0') << value.toInt64(3);
+  os << stringFormat("{}:{:02}:{:02}", ((static_cast<uint16_t>(value.toInt64(0)) << 8) + value.toInt64(1)),
+                     value.toInt64(2), value.toInt64(3));
   return os;
 }
 
 std::ostream& PentaxMakerNote::printTime(std::ostream& os, const Value& value, const ExifData*) {
   std::ios::fmtflags f(os.flags());
-  os << std::setw(2) << std::setfill('0') << value.toInt64(0);
-  os << ":";
-  os << std::setw(2) << std::setfill('0') << value.toInt64(1);
-  os << ":";
-  os << std::setw(2) << std::setfill('0') << value.toInt64(2);
+  os << stringFormat("{:02}:{:02}:{:02}", value.toInt64(0), value.toInt64(1), value.toInt64(2));
   os.flags(f);
   return os;
 }
@@ -1089,7 +1084,7 @@ static std::ostream& resolveLens0x32c(std::ostream& os, const Value& value, cons
     long focalLength = getKeyLong("Exif.Photo.FocalLength", metadata);
     bool bFL10_20 = 10 <= focalLength && focalLength <= 20;
 
-    // std::cout << "model,focalLength = " << model << "," << focalLength << std::endl;
+    // std::cout << "model,focalLength = " << model << "," << focalLength << '\n';
     if (bFL10_20) {
       index = 1;
     }
@@ -1258,9 +1253,9 @@ static std::ostream& printLensType(std::ostream& os, const Value& value, const E
     return os << Internal::readExiv2Config(section, value.toString(), undefined);
   }
 
-  const auto index = value.toUint32(0) * 256 + value.toUint32(1);
+  const auto index = (value.toUint32(0) * 256) + value.toUint32(1);
 
-  // std::cout << std::endl << "printLensType value =" << value.toLong() << " index = " << index << std::endl;
+  // std::cout << '\n' << "printLensType value =" << value.toLong() << " index = " << index << '\n';
   auto lif = Exiv2::find(lensIdFct, index);
   if (!lif)
     return EXV_PRINT_COMBITAG_MULTI(pentaxLensType, 2, 1, 2)(os, value, metadata);
